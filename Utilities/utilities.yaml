@@ -1,0 +1,44 @@
+---
+version: "2.1"
+services:
+  # Haimdal
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    container_name: heimdall
+    environment:
+      - PUID=1000
+      - PGID=100
+      - TZ=Africa/Johannesburg
+    volumes:
+      - [Your path]/heimdall:/config
+    ports:
+      - 83:80
+      - 446:443
+    restart: unless-stopped
+
+  #Duplicati
+  duplicati:
+    image: ghcr.io/linuxserver/duplicati
+    container_name: duplicati
+    environment:
+      - PUID=1000
+      - PGID=100
+      - TZ=Africa/Johannesburg
+    volumes:
+      - [Your path]/duplicati:/config
+      - [Your path]/docker-backups:/backups
+      - [Your path]/docker:/source
+    ports:
+      - 8200:8200
+    restart: unless-stopped
+
+  # Watchtower
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Africa/Johannesburg
+    command: --interval 60
+    restart: unless-stopped

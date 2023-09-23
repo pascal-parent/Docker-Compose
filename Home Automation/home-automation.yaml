@@ -1,0 +1,116 @@
+---
+version: "3.8"
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    volumes:
+      - [Your path]/homeassistant:/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 8123:8123
+    environment:
+      - TZ=Africa/Johannesburg
+    network_mode: host
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      - db
+      - influxdb
+
+  db:
+    image: mariadb:latest
+    container_name: homeassitant-db
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Africa/Johannesburg
+      - MYSQL_ROOT_PASSWORD=[Your Password]
+      - MYSQL_DATABASE=home_assistant
+      - MYSQL_USER=hass
+      - MYSQL_PASSWORD=[Your Password]
+    volumes:
+      - [Your path]/homeassistant/mariadb/data:/var/lib/mysql
+      - [Your path]/homeassistant/mariadb/config:/etc/mysql/conf.d
+    ports:
+      - 33061:3306
+    restart: unless-stopped
+
+  esphome:
+    image: esphome/esphome:latest
+    container_name: esphome
+    volumes:
+      - [Your path]/esphome:/config
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 6052:6052/tcp
+    environment:
+      - TZ=Africa/Johannesburg
+      - ESPHOME_DASHBOARD_USE_PING=true
+    network_mode: host
+    restart: unless-stopped
+
+  node-red:
+    image: nodered/node-red:latest
+    container_name: node-red
+    volumes:
+      - [Your path]/node-red:/data
+    ports:
+      - 1880:1880/tcp
+    environment:
+      - TZ=Africa/Johannesburg
+    network_mode: host
+    restart: unless-stopped
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt
+    container_name: zigbee2mqtt
+    volumes:
+      - [Your path]/zigbee2mqtt:/app/data
+      - /run/udev:/run/udev:ro
+    ports:
+      - 8083:8080
+    environment:
+      - TZ=Africa/Johannesburg
+    devices:
+      - /dev/ttyUSB0:/dev/ttyACM0
+    network_mode: host
+    privileged: true
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    volumes:
+      - [Your path]/mosquitto:/mosquitto
+      - [Your path]/mosquitto/data:/mosquitto/data
+      - [Your path]/mosquitto/log:/mosquitto/log
+    ports:
+      - 1883:1883
+      - 8883:8883
+      - 9001:9001
+    network_mode: host
+    restart: unless-stopped
+
+  influxdb:
+    container_name: homeassitant-influxdb
+    image: influxdb:latest
+    ports:
+      - 8086:8086/tcp
+    environment:
+      - TZ=Africa/Johannesburg
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=homeassistant
+      - DOCKER_INFLUXDB_INIT_PASSWORD=[Your Password]
+      - DOCKER_INFLUXDB_INIT_ORG=[Your Org]
+      - DOCKER_INFLUXDB_INIT_BUCKET=homeassistant
+    volumes:
+      - [Your path]/influxdb/data:/var/lib/influxdb2
+      - [Your path]/influxdb/config/:/etc/influxdb2
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 32768
+    restart: unless-stopped

@@ -22,7 +22,7 @@ services:
       - influxdb
 
   #----------------------------------------------
-  # MariaDB for Home Assiatant
+  # MariaDB for Home Assistant
   #----------------------------------------------
   db:
     image: mariadb:latest

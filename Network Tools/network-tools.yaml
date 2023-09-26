@@ -96,7 +96,7 @@ services:
   # Uptime Kuma
   #----------------------------------------------
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptimekuma:1
     container_name: kuma
     volumes:
       - ${storage_volume}/uptime-kuma:/app/data

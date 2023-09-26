@@ -1,16 +1,19 @@
 ---
 version: "3.8"
 services:
+  #----------------------------------------------
+  # Home Assistant
+  #----------------------------------------------
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:stable
     container_name: homeassistant
     volumes:
-      - [Your path]/homeassistant:/config
+      - ${storage_volume}/homeassistant:/config
       - /etc/localtime:/etc/localtime:ro
     ports:
       - 8123:8123
     environment:
-      - TZ=Africa/Johannesburg
+      - TZ=${time_zone}
     network_mode: host
     privileged: true
     restart: unless-stopped
@@ -18,60 +21,75 @@ services:
       - db
       - influxdb
 
+  #----------------------------------------------
+  # MariaDB for Home Assiatant
+  #----------------------------------------------
   db:
     image: mariadb:latest
     container_name: homeassitant-db
     environment:
-      - PUID=1026
-      - PGID=100
-      - TZ=Africa/Johannesburg
-      - MYSQL_ROOT_PASSWORD=[Your Password]
-      - MYSQL_DATABASE=home_assistant
-      - MYSQL_USER=hass
-      - MYSQL_PASSWORD=[Your Password]
+      - PUID=${UID}
+      - PGID=${GID}
+      - TZ=${time_zone}
+      - MYSQL_ROOT_PASSWORD=${mysql_root_psw}
+      - MYSQL_DATABASE=${mysql_ha_db}
+      - MYSQL_USER=${mysql_ha_user}
+      - MYSQL_PASSWORD=${mysql_ha_psw}
     volumes:
-      - [Your path]/homeassistant/mariadb/data:/var/lib/mysql
-      - [Your path]/homeassistant/mariadb/config:/etc/mysql/conf.d
+      - ${storage_volume}/homeassistant/mariadb/data:/var/lib/mysql
+      - ${storage_volume}/homeassistant/mariadb/config:/etc/mysql/conf.d
     ports:
       - 33061:3306
     restart: unless-stopped
 
+  #----------------------------------------------
+  # ESPHOME
+  #----------------------------------------------
   esphome:
-    image: esphome/esphome:latest
+    image: esphome/esphome
     container_name: esphome
     volumes:
-      - [Your path]/esphome:/config
+      - ${storage_volume}/esphome:/config
       - /etc/localtime:/etc/localtime:ro
     ports:
       - 6052:6052/tcp
     environment:
-      - TZ=Africa/Johannesburg
+      - TZ=${time_zone}
       - ESPHOME_DASHBOARD_USE_PING=true
     network_mode: host
     restart: unless-stopped
 
+  #----------------------------------------------
+  # Node Red
+  #----------------------------------------------
   node-red:
     image: nodered/node-red:latest
     container_name: node-red
     volumes:
-      - [Your path]/node-red:/data
+      - ${storage_volume}/node-red:/data
     ports:
       - 1880:1880/tcp
     environment:
-      - TZ=Africa/Johannesburg
+      - TZ=${time_zone}
     network_mode: host
+    depends_on:
+      - mosquitto
+      - homeassistant
     restart: unless-stopped
 
+  #----------------------------------------------
+  # Zigbee2MQTT
+  #----------------------------------------------
   zigbee2mqtt:
     image: koenkk/zigbee2mqtt
     container_name: zigbee2mqtt
     volumes:
-      - [Your path]/zigbee2mqtt:/app/data
+      - ${storage_volume}/zigbee2mqtt:/app/data
       - /run/udev:/run/udev:ro
     ports:
       - 8083:8080
     environment:
-      - TZ=Africa/Johannesburg
+      - TZ=${time_zone}
     devices:
       - /dev/ttyUSB0:/dev/ttyACM0
     network_mode: host
@@ -80,13 +98,16 @@ services:
       - mosquitto
     restart: unless-stopped
 
+  #----------------------------------------------
+  # Mosquitto
+  #----------------------------------------------
   mosquitto:
     image: eclipse-mosquitto:latest
     container_name: mosquitto
     volumes:
-      - [Your path]/mosquitto:/mosquitto
-      - [Your path]/mosquitto/data:/mosquitto/data
-      - [Your path]/mosquitto/log:/mosquitto/log
+      - ${storage_volume}/mosquitto:/mosquitto
+      - ${storage_volume}/mosquitto/data:/mosquitto/data
+      - ${storage_volume}/mosquitto/log:/mosquitto/log
     ports:
       - 1883:1883
       - 8883:8883
@@ -94,23 +115,48 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  #----------------------------------------------
+  # InfluxDB
+  #----------------------------------------------
   influxdb:
     container_name: homeassitant-influxdb
-    image: influxdb:latest
+    image: influxdb
     ports:
-      - 8086:8086/tcp
+      - 8086:8086/tcp # So we can access the WebUI
     environment:
-      - TZ=Africa/Johannesburg
+      - TZ=${time_zone}
       - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=homeassistant
-      - DOCKER_INFLUXDB_INIT_PASSWORD=[Your Password]
-      - DOCKER_INFLUXDB_INIT_ORG=[Your Org]
-      - DOCKER_INFLUXDB_INIT_BUCKET=homeassistant
+      - DOCKER_INFLUXDB_INIT_USERNAME=${influxdb_ha_user}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${influxdb_ha_psw}
+      - DOCKER_INFLUXDB_INIT_ORG=${influxdb_ha_org}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${influxdb_ha_bucket}
     volumes:
-      - [Your path]/influxdb/data:/var/lib/influxdb2
-      - [Your path]/influxdb/config/:/etc/influxdb2
+      - ${storage_volume}/influxdb/data:/var/lib/influxdb2
+      - ${storage_volume}/influxdb/config/:/etc/influxdb2
     ulimits:
       nofile:
         soft: 32768
         hard: 32768
+    restart: unless-stopped
+
+  #----------------------------------------------
+  # Grafana
+  #----------------------------------------------
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    user: ${UID}:${GID}
+    environment:
+      - GF_SECURITY_ADMIN_USER=${grafana_ha_admin_user}
+      - GF_SECURITY_ADMIN_PASSWORD=${grafana_ha_psw}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    links:
+      - influxdb
+    ports:
+      - 3000:3000
+    volumes:
+      - ${storage_volume}/grafana:/var/lib/grafana
+    privileged: true
+    depends_on:
+      - influxdb
     restart: unless-stopped
